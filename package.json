@@ -19,6 +19,11 @@
         "provenance": true
     },
     "sideEffects": false,
+    "browser": {
+        "undici": false,
+        "fs": false,
+        "path": false
+    },
     "engines": {
         "node": ">=24",
         "npm": ">=11"
@@ -71,6 +76,7 @@
         "oxfmt": "0.73.0",
         "oxlint": "1.57.0",
         "rimraf": "6.1.3",
+        "rolldown": "1.2.15",
         "semantic-release": "25.0.3",
         "ts-node": "10.9.2",
         "type-fest": "^5.0.0",
