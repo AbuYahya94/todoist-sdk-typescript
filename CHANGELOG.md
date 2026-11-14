@@ -1,3 +1,9 @@
+## [20.0.1](https://github.com/todoist/todoist-sdk-typescript/compare/v20.0.0...v20.0.1) (2026-11-14)
+
+### Bug Fixes
+
+* let browser bundlers leave undici, fs and path out ([#771](https://github.com/todoist/todoist-sdk-typescript/issues/771)) ([a95b48a](https://github.com/todoist/todoist-sdk-typescript/commit/a95b48a54a726ce90163c643a2fbbd31f67b0fc4))
+
 ## [20.0.0](https://github.com/todoist/todoist-sdk-typescript/compare/v19.0.0...v20.0.0) (2026-11-12)
 
 ### ⚠ BREAKING CHANGES
