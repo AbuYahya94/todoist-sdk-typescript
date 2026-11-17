@@ -1,3 +1,9 @@
+## [21.1.0](https://github.com/todoist/todoist-sdk-typescript/compare/v21.0.0...v21.1.0) (2026-11-17)
+
+### Features
+
+* return the user's status from getUser ([#775](https://github.com/todoist/todoist-sdk-typescript/issues/775)) ([e142963](https://github.com/todoist/todoist-sdk-typescript/commit/e142963b8b9642c1a613df935206ece64d04acb1))
+
 ## [21.0.0](https://github.com/todoist/todoist-sdk-typescript/compare/v20.0.1...v21.0.0) (2026-11-17)
 
 ### ⚠ BREAKING CHANGES
