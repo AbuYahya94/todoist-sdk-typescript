@@ -1,3 +1,13 @@
+## [21.0.0](https://github.com/todoist/todoist-sdk-typescript/compare/v20.0.1...v21.0.0) (2026-11-17)
+
+### ⚠ BREAKING CHANGES
+
+* accept a user status that has only an emoji (#773)
+
+### Bug Fixes
+
+* accept a user status that has only an emoji ([#773](https://github.com/todoist/todoist-sdk-typescript/issues/773)) ([e5ac491](https://github.com/todoist/todoist-sdk-typescript/commit/e5ac491babdd5f04a4c8f99bddd8bc6049ba3bf8))
+
 ## [20.0.1](https://github.com/todoist/todoist-sdk-typescript/compare/v20.0.0...v20.0.1) (2026-11-14)
 
 ### Bug Fixes
