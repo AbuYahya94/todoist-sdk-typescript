@@ -1,3 +1,9 @@
+## [22.0.1](https://github.com/todoist/todoist-sdk-typescript/compare/v22.0.0...v22.0.1) (2026-11-19)
+
+### Bug Fixes
+
+* check every ID in a request path with IdSchema ([#777](https://github.com/todoist/todoist-sdk-typescript/issues/777)) ([666aa8c](https://github.com/todoist/todoist-sdk-typescript/commit/666aa8cae9ce2d31f5bbfd406056efbf56b57e49))
+
 ## [22.0.0](https://github.com/todoist/todoist-sdk-typescript/compare/v21.1.0...v22.0.0) (2026-11-19)
 
 ### ⚠ BREAKING CHANGES
