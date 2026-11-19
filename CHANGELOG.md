@@ -1,3 +1,13 @@
+## [23.0.0](https://github.com/todoist/todoist-sdk-typescript/compare/v22.0.1...v23.0.0) (2026-11-19)
+
+### ⚠ BREAKING CHANGES
+
+* remove getProjectHealthContext, whose endpoint is gone (#778)
+
+### Bug Fixes
+
+* remove getProjectHealthContext, whose endpoint is gone ([#778](https://github.com/todoist/todoist-sdk-typescript/issues/778)) ([99428e7](https://github.com/todoist/todoist-sdk-typescript/commit/99428e73ad306e92b01ced437660e768e93a3a09))
+
 ## [22.0.1](https://github.com/todoist/todoist-sdk-typescript/compare/v22.0.0...v22.0.1) (2026-11-19)
 
 ### Bug Fixes
