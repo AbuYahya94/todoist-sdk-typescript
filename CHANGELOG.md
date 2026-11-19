@@ -1,3 +1,13 @@
+## [22.0.0](https://github.com/todoist/todoist-sdk-typescript/compare/v21.1.0...v22.0.0) (2026-11-19)
+
+### ⚠ BREAKING CHANGES
+
+* reject tmp- reminder IDs and remove ReminderIdSchema (#776)
+
+### Bug Fixes
+
+* reject tmp- reminder IDs and remove ReminderIdSchema ([#776](https://github.com/todoist/todoist-sdk-typescript/issues/776)) ([05b4953](https://github.com/todoist/todoist-sdk-typescript/commit/05b4953f569bc99d1f80a2c67c887a23d6dd0430))
+
 ## [21.1.0](https://github.com/todoist/todoist-sdk-typescript/compare/v21.0.0...v21.1.0) (2026-11-17)
 
 ### Features
