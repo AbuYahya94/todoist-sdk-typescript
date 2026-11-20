@@ -164,12 +164,28 @@ import {
     GetAllCompletedTasksResponse,
 } from './types/tasks'
 import {
-    ExportTemplateFileArgs,
+    ExportProjectAsCsvArgs,
     ExportTemplateUrlArgs,
     ExportTemplateUrlResponse,
-    CreateProjectFromTemplateArgs,
-    CreateProjectFromTemplateResponse,
-    ImportTemplateIntoProjectArgs,
+    AddProjectFromCsvArgs,
+    AddProjectFromCsvResponse,
+    AddProjectFromTemplateIdArgs,
+    AddProjectFromTemplateIdResponse,
+    SaveProjectAsTemplateArgs,
+    TemplateContentResponse,
+    AddTemplateArgs,
+    PreviewTemplateFromCsvArgs,
+    UpdateTemplateArgs,
+    TemplateFromCsvPreview,
+    GetTemplateArgs,
+    GetTemplateContentArgs,
+    GetTemplateCategoriesArgs,
+    GetTemplatesArgs,
+    GetTemplatesByIdsArgs,
+    GetTemplatesResponse,
+    Template,
+    TemplateCategory,
+    ImportCsvIntoProjectArgs,
     ImportTemplateFromIdArgs,
     ImportTemplateResponse,
 } from './types/templates'
@@ -1675,13 +1691,13 @@ export class TodoistApi {
     // ── Templates ──
 
     /**
-     * Exports a project as a template file (CSV format).
+     * Exports a project as a CSV file.
      *
      * @param args - Arguments including project ID and optional date format preference.
-     * @returns A promise that resolves to the template file content as a string.
+     * @returns A promise that resolves to the CSV content as a string.
      */
-    async exportTemplateAsFile(args: ExportTemplateFileArgs): Promise<string> {
-        return this.templateClient.exportTemplateAsFile(args)
+    async exportProjectAsCsv(args: ExportProjectAsCsvArgs): Promise<string> {
+        return this.templateClient.exportProjectAsCsv(args)
     }
 
     /**
@@ -1695,31 +1711,196 @@ export class TodoistApi {
     }
 
     /**
-     * Creates a new project from a template file.
+     * Creates a new project from a CSV file.
      *
-     * @param args - Arguments including project name, template file, and optional workspace ID.
+     * @param args - Arguments including project name, CSV file, and optional workspace ID.
      * @param requestId - Optional custom identifier for the request.
      * @returns A promise that resolves to the created project data.
      */
-    async createProjectFromTemplate(
-        args: CreateProjectFromTemplateArgs,
+    async addProjectFromCsv(
+        args: AddProjectFromCsvArgs,
         requestId?: string,
-    ): Promise<CreateProjectFromTemplateResponse> {
-        return this.templateClient.createProjectFromTemplate(args, requestId)
+    ): Promise<AddProjectFromCsvResponse> {
+        return this.templateClient.addProjectFromCsv(args, requestId)
     }
 
     /**
-     * Imports a template file into an existing project.
+     * Discovers templates: curated by Doist, saved by the user, or saved to the user's workspaces.
      *
-     * @param args - Arguments including project ID and template file.
+     * Lists curated templates unless `templateSource` says otherwise. Personal and workspace
+     * templates require the `data:read` scope. With a `query`, each page puts personal, then
+     * workspace, then curated templates first, ranked by the query.
+     *
+     * @param args - Optional filters, search query and pagination.
+     * @returns A promise that resolves to a page of templates and the cursor for the next one.
+     */
+    async getTemplates(args: GetTemplatesArgs = {}): Promise<GetTemplatesResponse> {
+        return this.templateClient.getTemplates(args)
+    }
+
+    /**
+     * Looks up templates by ID. Missing IDs and templates the user cannot see are omitted.
+     *
+     * @param args - Up to 100 curated slugs or `UT_` template IDs, plus optional locale and pagination.
+     * @returns A promise that resolves to a page of templates and the cursor for the next one.
+     */
+    async getTemplatesByIds(args: GetTemplatesByIdsArgs): Promise<GetTemplatesResponse> {
+        return this.templateClient.getTemplatesByIds(args)
+    }
+
+    /**
+     * Gets a single template by curated slug or `UT_` template ID.
+     *
+     * @param id - The template ID.
+     * @param args - Optional locale.
+     * @returns A promise that resolves to the template.
+     */
+    async getTemplate(id: string, args?: GetTemplateArgs): Promise<Template> {
+        return this.templateClient.getTemplate(id, args)
+    }
+
+    /**
+     * Lists the curated template categories, in gallery display order.
+     *
+     * @param args - Optional template type and locale.
+     * @returns A promise that resolves to the categories.
+     */
+    async getTemplateCategories(args?: GetTemplateCategoriesArgs): Promise<TemplateCategory[]> {
+        return this.templateClient.getTemplateCategories(args)
+    }
+
+    /**
+     * Creates a new project from a template ID.
+     *
+     * Setup templates are not supported. Workspace templates can only be used in their own workspace.
+     *
+     * @param args - Arguments including the template ID and optional name, locale, workspace and folder.
+     * @param requestId - Optional custom identifier for the request.
+     * @returns A promise that resolves to the new project's ID.
+     */
+    async addProjectFromTemplateId(
+        args: AddProjectFromTemplateIdArgs,
+        requestId?: string,
+    ): Promise<AddProjectFromTemplateIdResponse> {
+        return this.templateClient.addProjectFromTemplateId(args, requestId)
+    }
+
+    /**
+     * Gets the content a project would be saved as, without saving a template: its layout,
+     * sections, tasks and comments, as a draft.
+     *
+     * To save an edited draft, pass its `content` to `saveProjectAsTemplate` along with the
+     * project ID, as the Todoist web app's "Save as template" editor does.
+     *
+     * @param projectId - The project to preview.
+     * @returns A promise that resolves to the project's template type, workspace and content.
+     */
+    async previewProjectAsTemplate(projectId: string): Promise<TemplateContentResponse> {
+        return this.templateClient.previewProjectAsTemplate(projectId)
+    }
+
+    /**
+     * Saves a project as a template.
+     *
+     * Task assignments are kept only when the template is saved to a workspace. Pass `content`
+     * to save an edited draft from `previewProjectAsTemplate` instead of the project as it is.
+     *
+     * @param args - Arguments including the project ID, template name, description and color.
+     * @param requestId - Optional custom identifier for the request.
+     * @returns A promise that resolves to the saved template.
+     */
+    async saveProjectAsTemplate(
+        args: SaveProjectAsTemplateArgs,
+        requestId?: string,
+    ): Promise<Template> {
+        return this.templateClient.saveProjectAsTemplate(args, requestId)
+    }
+
+    /**
+     * Gets a template's full content: its layout, sections, tasks and comments.
+     *
+     * Dates are returned as complete objects, with their type, time and timezone, which
+     * `updateTemplate` accepts back unchanged. To edit a saved template's content, read it with
+     * this method, change it, and pass it to `updateTemplate` as `content`.
+     *
+     * Only project templates can be read. Setup templates, which create several projects and
+     * labels, are rejected with a `TodoistArgumentError`.
+     *
+     * @param templateId - A curated slug or a `UT_` template ID.
+     * @param args - Optional locale.
+     * @returns A promise that resolves to the template's type, workspace and content.
+     */
+    async getTemplateContent(
+        templateId: string,
+        args?: GetTemplateContentArgs,
+    ): Promise<TemplateContentResponse> {
+        return this.templateClient.getTemplateContent(templateId, args)
+    }
+
+    /**
+     * Updates a saved template. Omitted fields stay unchanged.
+     *
+     * Pass `projectId` to replace the template's content with that project's current content, or
+     * `content` to replace it with content you provide, e.g. from `getTemplateContent` with edits.
+     * Anything left out of `content` is removed.
+     * A shared workspace template can be edited by its author or a workspace admin; only the
+     * author can change sharing.
+     *
+     * @param templateId - The `UT_` template ID.
+     * @param args - The fields to change.
+     * @param requestId - Optional custom identifier for the request.
+     * @returns A promise that resolves to the updated template.
+     */
+    async updateTemplate(
+        templateId: string,
+        args: UpdateTemplateArgs,
+        requestId?: string,
+    ): Promise<Template> {
+        return this.templateClient.updateTemplate(templateId, args, requestId)
+    }
+
+    /**
+     * Stages a CSV file and returns the template content it would create, without saving it.
+     *
+     * @param args - The CSV file to stage.
+     * @param requestId - Optional custom identifier for the request.
+     * @returns A promise that resolves to the staged content and its `uploadedFileName`.
+     */
+    async previewTemplateFromCsv(
+        args: PreviewTemplateFromCsvArgs,
+        requestId?: string,
+    ): Promise<TemplateFromCsvPreview> {
+        return this.templateClient.previewTemplateFromCsv(args, requestId)
+    }
+
+    /**
+     * Creates a personal template from template content, a CSV file, or a CSV staged with
+     * `previewTemplateFromCsv`, without a project. To save a project as a template, use
+     * `saveProjectAsTemplate`.
+     *
+     * Task assignees are discarded. Use `updateTemplate` with `workspaceId` to move the
+     * template into a workspace afterwards.
+     *
+     * @param args - The `content`, the CSV `file` or a staged `uploadedFileName`, plus the template's name, description and color.
+     * @param requestId - Optional custom identifier for the request.
+     * @returns A promise that resolves to the saved template.
+     */
+    async addTemplate(args: AddTemplateArgs, requestId?: string): Promise<Template> {
+        return this.templateClient.addTemplate(args, requestId)
+    }
+
+    /**
+     * Imports a CSV file into an existing project.
+     *
+     * @param args - Arguments including project ID and CSV file.
      * @param requestId - Optional custom identifier for the request.
      * @returns A promise that resolves to the import result.
      */
-    async importTemplateIntoProject(
-        args: ImportTemplateIntoProjectArgs,
+    async importCsvIntoProject(
+        args: ImportCsvIntoProjectArgs,
         requestId?: string,
     ): Promise<ImportTemplateResponse> {
-        return this.templateClient.importTemplateIntoProject(args, requestId)
+        return this.templateClient.importCsvIntoProject(args, requestId)
     }
 
     /**

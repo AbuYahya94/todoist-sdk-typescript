@@ -9,10 +9,17 @@ export const TODOIST_WEB_URI = 'https://app.todoist.com/app'
 export const API_VERSION = 'v1'
 
 export const API_BASE_URI = `/api/${API_VERSION}/`
+
 const API_AUTHORIZATION_BASE_URI = '/oauth/'
 
 export function getSyncBaseUri(domainBase: string = BASE_URI): string {
     return new URL(API_BASE_URI, domainBase).toString()
+}
+
+// Saved-template routes use API v1.6, as the Todoist web app does. It is the first version that
+// keeps due dates' type, time and timezone when saving template content and project exports.
+export function getTemplatesBaseUri(domainBase: string = BASE_URI): string {
+    return new URL('/api/v1.6/', domainBase).toString()
 }
 
 export function getApiRootBaseUri(domainBase: string = BASE_URI): string {
@@ -66,10 +73,17 @@ export const ENDPOINT_REST_PROJECTS_MOVE_TO_PERSONAL = ENDPOINT_REST_PROJECTS + 
 export const ENDPOINT_REST_TASKS_COMPLETED = ENDPOINT_REST_TASKS + '/completed'
 export const ENDPOINT_REST_TEMPLATES_FILE = 'templates/file'
 export const ENDPOINT_REST_TEMPLATES_URL = 'templates/url'
-export const ENDPOINT_REST_TEMPLATES_CREATE_FROM_FILE = 'templates/create_project_from_file'
-export const ENDPOINT_REST_TEMPLATES_IMPORT_FROM_FILE = 'templates/import_into_project_from_file'
-export const ENDPOINT_REST_TEMPLATES_IMPORT_FROM_ID =
-    'templates/import_into_project_from_template_id'
+export const ENDPOINT_REST_TEMPLATES_PREVIEW = 'templates/preview'
+export const ENDPOINT_REST_TEMPLATES = 'templates'
+export const ENDPOINT_REST_TEMPLATES_CATEGORIES = 'templates/categories'
+export const ENDPOINT_REST_TEMPLATES_USER = 'templates/user'
+export const ENDPOINT_REST_TEMPLATES_USER_PREVIEW = 'templates/user/preview'
+export const ENDPOINT_REST_TEMPLATES_USER_IMPORT = 'templates/user/import'
+export const TEMPLATE_PREVIEW = 'preview'
+export const ENDPOINT_REST_PROJECTS_FROM_TEMPLATE = ENDPOINT_REST_PROJECTS + '/from_template'
+export const PROJECT_IMPORT = 'import'
+export const ENDPOINT_REST_PROJECTS_IMPORT = ENDPOINT_REST_PROJECTS + '/' + PROJECT_IMPORT
+export const PROJECT_IMPORT_TEMPLATE = 'import_template'
 
 export const ENDPOINT_REST_ACCESS_TOKENS_MIGRATE = 'access_tokens/migrate_personal_token'
 export const ENDPOINT_REST_BACKUPS = 'backups'

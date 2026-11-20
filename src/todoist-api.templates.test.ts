@@ -1,13 +1,49 @@
 import { vi } from 'vitest'
 import { TodoistApi } from '.'
-import { getSyncBaseUri } from './consts/endpoints'
+import { getSyncBaseUri, getTemplatesBaseUri } from './consts/endpoints'
 import { server, http, HttpResponse } from './test-utils/msw-setup'
-import { DEFAULT_AUTH_TOKEN, DEFAULT_SECTION, DEFAULT_TASK } from './test-utils/test-defaults'
+import {
+    DEFAULT_AUTH_TOKEN,
+    DEFAULT_PROJECT,
+    DEFAULT_SECTION,
+    DEFAULT_TASK,
+} from './test-utils/test-defaults'
+import { TodoistArgumentError } from './types/errors'
+import { camelCaseKeys } from './utils/case-conversion'
 import { uploadMultipartFile } from './utils/multipart-upload'
 
 // Mock the multipart upload helper
 vi.mock('./utils/multipart-upload')
 const mockedUploadMultipartFile = vi.mocked(uploadMultipartFile)
+
+const RAW_TEMPLATE = {
+    id: 'UT_28Rc62VC22j439VcPJMw9xgWx2',
+    name: 'Launch plan',
+    template_type: 'project',
+    template_source: 'user',
+    short_description: 'Everything for a launch',
+    long_description: 'Everything for a launch',
+    instructions: null,
+    import_url: null,
+    view_type: 'board',
+    thumbnail_image: null,
+    thumbnail_image_dark: null,
+    cover_image: null,
+    preview_image: null,
+    template_color: 'blue',
+    background_color: null,
+    background_color_dark: null,
+    creator: { user_id: '1', name: 'Ada', position: '', avatar: '' },
+    seo: null,
+    more_resources: [],
+    category_ids: [],
+    project_count: null,
+    workspace_id: null,
+    shared_with_workspace_members: false,
+    can_edit: true,
+    last_edited_by: { user_id: '1', name: 'Ada', position: '', avatar: '' },
+    last_edited_at: '2026-11-04T10:00:00Z',
+}
 
 function getTarget() {
     return new TodoistApi(DEFAULT_AUTH_TOKEN)
@@ -18,7 +54,7 @@ describe('TodoistApi template endpoints', () => {
         vi.clearAllMocks()
     })
 
-    describe('exportTemplateAsFile', () => {
+    describe('exportProjectAsCsv', () => {
         test('returns file content from rest client', async () => {
             server.use(
                 http.get(`${getSyncBaseUri()}templates/file`, () => {
@@ -29,7 +65,7 @@ describe('TodoistApi template endpoints', () => {
             )
             const api = getTarget()
 
-            const result = await api.exportTemplateAsFile({ projectId: '123' })
+            const result = await api.exportProjectAsCsv({ projectId: '123' })
 
             expect(result).toBe('task,priority\nBuy milk,4')
         })
@@ -57,7 +93,7 @@ describe('TodoistApi template endpoints', () => {
         })
     })
 
-    describe('createProjectFromTemplate', () => {
+    describe('addProjectFromCsv', () => {
         test('uploads file and returns validated response', async () => {
             mockedUploadMultipartFile.mockResolvedValue({
                 status: 'ok',
@@ -70,7 +106,7 @@ describe('TodoistApi template endpoints', () => {
             })
 
             const api = getTarget()
-            const result = await api.createProjectFromTemplate({
+            const result = await api.addProjectFromCsv({
                 name: 'New Project',
                 file: Buffer.from('template content'),
                 fileName: 'template.csv',
@@ -78,7 +114,7 @@ describe('TodoistApi template endpoints', () => {
 
             expect(mockedUploadMultipartFile).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    endpoint: 'templates/create_project_from_file',
+                    endpoint: 'projects/import',
                     additionalFields: { name: 'New Project' },
                 }),
             )
@@ -99,7 +135,7 @@ describe('TodoistApi template endpoints', () => {
             })
 
             const api = getTarget()
-            await api.createProjectFromTemplate({
+            await api.addProjectFromCsv({
                 name: 'Workspace Project',
                 file: Buffer.from('content'),
                 fileName: 'template.csv',
@@ -114,7 +150,7 @@ describe('TodoistApi template endpoints', () => {
         })
     })
 
-    describe('importTemplateIntoProject', () => {
+    describe('importCsvIntoProject', () => {
         test('uploads file and returns validated response', async () => {
             mockedUploadMultipartFile.mockResolvedValue({
                 status: 'ok',
@@ -126,7 +162,7 @@ describe('TodoistApi template endpoints', () => {
             })
 
             const api = getTarget()
-            const result = await api.importTemplateIntoProject({
+            const result = await api.importCsvIntoProject({
                 projectId: 'proj_123',
                 file: Buffer.from('template content'),
                 fileName: 'template.csv',
@@ -134,17 +170,26 @@ describe('TodoistApi template endpoints', () => {
 
             expect(mockedUploadMultipartFile).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    endpoint: 'templates/import_into_project_from_file',
-                    additionalFields: { project_id: 'proj_123' },
+                    endpoint: 'projects/proj_123/import',
+                    additionalFields: {},
                 }),
             )
             expect(result.status).toBe('ok')
             expect(result.tasks).toHaveLength(1)
         })
+
+        test('rejects an empty project ID before uploading', async () => {
+            const api = getTarget()
+
+            await expect(
+                api.importCsvIntoProject({ projectId: '', file: Buffer.from('content') }),
+            ).rejects.toThrow()
+            expect(mockedUploadMultipartFile).not.toHaveBeenCalled()
+        })
     })
 
     describe('importTemplateFromId', () => {
-        test('returns import result from rest client', async () => {
+        test('posts to the project and keeps the project ID out of the body', async () => {
             const mockResponse = {
                 status: 'ok',
                 template_type: 'project',
@@ -154,10 +199,12 @@ describe('TodoistApi template endpoints', () => {
                 comments: [],
                 project_notes: [],
             }
+            let body: unknown
             server.use(
                 http.post(
-                    `${getSyncBaseUri()}templates/import_into_project_from_template_id`,
-                    () => {
+                    `${getSyncBaseUri()}projects/123/import_template`,
+                    async ({ request }) => {
+                        body = await request.json()
                         return HttpResponse.json(mockResponse, { status: 200 })
                     },
                 ),
@@ -167,12 +214,826 @@ describe('TodoistApi template endpoints', () => {
             const result = await api.importTemplateFromId({
                 projectId: '123',
                 templateId: 'product-launch',
+                locale: 'de',
             })
 
+            expect(body).toEqual({ template_id: 'product-launch', locale: 'de' })
             expect(result.status).toBe('ok')
             expect(result.templateType).toBe('project')
             expect(result.tasks).toEqual([])
             expect(result.sections).toEqual([])
+        })
+
+        test('rejects an empty project ID before making a request', async () => {
+            let called = false
+            server.use(
+                http.post(`${getSyncBaseUri()}projects/*`, () => {
+                    called = true
+                    return HttpResponse.json({ status: 'ok' })
+                }),
+            )
+            const api = getTarget()
+
+            await expect(
+                api.importTemplateFromId({ projectId: '', templateId: 'product-launch' }),
+            ).rejects.toThrow()
+            expect(called).toBe(false)
+        })
+    })
+
+    describe('addProjectFromTemplateId', () => {
+        test('posts snake_case args and returns the new project ID', async () => {
+            let body: unknown
+            server.use(
+                http.post(`${getSyncBaseUri()}projects/from_template`, async ({ request }) => {
+                    body = await request.json()
+                    return HttpResponse.json({ status: 'ok', project_id: '6X7rM8997g3RQmvh' })
+                }),
+            )
+            const api = getTarget()
+
+            const result = await api.addProjectFromTemplateId({
+                templateId: 'UT_28Rc62VC22j439VcPJMw9xgWx2',
+                name: 'Q3 launch',
+                workspaceId: '42',
+                folderId: '7',
+            })
+
+            expect(body).toEqual({
+                template_id: 'UT_28Rc62VC22j439VcPJMw9xgWx2',
+                name: 'Q3 launch',
+                workspace_id: '42',
+                folder_id: '7',
+            })
+            expect(result).toEqual({ status: 'ok', projectId: '6X7rM8997g3RQmvh' })
+        })
+
+        test('rejects a response without a project ID', async () => {
+            server.use(
+                http.post(`${getSyncBaseUri()}projects/from_template`, () =>
+                    HttpResponse.json({ status: 'error' }),
+                ),
+            )
+            const api = getTarget()
+
+            await expect(
+                api.addProjectFromTemplateId({ templateId: 'UT_28Rc62VC22j439VcPJMw9xgWx2' }),
+            ).rejects.toThrow()
+        })
+    })
+
+    describe('saveProjectAsTemplate', () => {
+        test('defaults to a project template and returns the validated template', async () => {
+            let body: unknown
+            server.use(
+                http.post(`${getTemplatesBaseUri()}templates/user`, async ({ request }) => {
+                    body = await request.json()
+                    return HttpResponse.json(RAW_TEMPLATE)
+                }),
+            )
+            const api = getTarget()
+
+            const result = await api.saveProjectAsTemplate({
+                projectId: '123',
+                name: 'Launch plan',
+                description: 'Everything for a launch',
+                color: 'blue',
+                forWorkspace: true,
+            })
+
+            expect(body).toEqual({
+                project_id: '123',
+                name: 'Launch plan',
+                description: 'Everything for a launch',
+                color: 'blue',
+                for_workspace: true,
+                template_type: 'project',
+            })
+            expect(result).toMatchObject({
+                id: 'UT_28Rc62VC22j439VcPJMw9xgWx2',
+                templateType: 'project',
+                templateSource: 'user',
+                viewType: 'board',
+                lastEditedBy: { userId: '1', name: 'Ada' },
+            })
+        })
+
+        test('sends a numeric color ID as a number', async () => {
+            let body: unknown
+            server.use(
+                http.post(`${getTemplatesBaseUri()}templates/user`, async ({ request }) => {
+                    body = await request.json()
+                    return HttpResponse.json(RAW_TEMPLATE)
+                }),
+            )
+            const api = getTarget()
+
+            await api.saveProjectAsTemplate({
+                projectId: '123',
+                name: 'Launch plan',
+                description: '',
+                color: 30,
+            })
+
+            expect(body).toMatchObject({ color: 30 })
+        })
+
+        test('reports a curated source as todoist, however the API spells it', async () => {
+            server.use(
+                http.post(`${getTemplatesBaseUri()}templates/user`, () =>
+                    HttpResponse.json({ ...RAW_TEMPLATE, template_source: 'doist' }),
+                ),
+            )
+            const api = getTarget()
+
+            const result = await api.saveProjectAsTemplate({
+                projectId: '123',
+                name: 'Launch plan',
+                description: '',
+                color: 'blue',
+            })
+
+            expect(result.templateSource).toBe('todoist')
+        })
+
+        test('saves an edited draft as content, in the API names', async () => {
+            let body: Record<string, unknown> = {}
+            server.use(
+                http.post(`${getTemplatesBaseUri()}templates/user`, async ({ request }) => {
+                    body = (await request.json()) as Record<string, unknown>
+                    return HttpResponse.json(RAW_TEMPLATE)
+                }),
+            )
+            const api = getTarget()
+
+            await api.saveProjectAsTemplate({
+                projectId: '123',
+                name: 'Launch plan',
+                description: 'A launch',
+                color: 'blue',
+                content: {
+                    projects: [{ viewStyle: 'board' }],
+                    sections: [],
+                    tasks: [{ id: 't1', content: 'Plan', responsibleUid: '42' }],
+                    comments: [{ taskId: 't1', content: 'Check this' }],
+                    projectComments: [],
+                    projectViewOptionsDefaults: [],
+                },
+            })
+
+            expect(body.project_id).toBe('123')
+            expect(body.content).toEqual({
+                projects: [{ view_style: 'board' }],
+                sections: [],
+                items: [{ id: 't1', content: 'Plan', responsible_uid: '42' }],
+                notes: [{ item_id: 't1', content: 'Check this' }],
+                project_notes: [],
+                project_view_options_defaults: [],
+            })
+        })
+
+        test('rejects a response that is not a template', async () => {
+            server.use(
+                http.post(`${getTemplatesBaseUri()}templates/user`, () =>
+                    HttpResponse.json({ status: 'ok' }),
+                ),
+            )
+            const api = getTarget()
+
+            await expect(
+                api.saveProjectAsTemplate({
+                    projectId: '123',
+                    name: 'Launch plan',
+                    description: '',
+                    color: 'blue',
+                }),
+            ).rejects.toThrow()
+        })
+    })
+
+    describe('getTemplates', () => {
+        test('sends filters as snake_case query params and validates each template', async () => {
+            let params: URLSearchParams | undefined
+            server.use(
+                http.get(`${getSyncBaseUri()}templates`, ({ request }) => {
+                    params = new URL(request.url).searchParams
+                    return HttpResponse.json({ results: [RAW_TEMPLATE], next_cursor: 'abc.def' })
+                }),
+            )
+            const api = getTarget()
+
+            const result = await api.getTemplates({
+                templateSource: 'all',
+                templateType: 'project',
+                query: 'launch',
+                categoryId: 'work',
+                limit: 10,
+            })
+
+            expect(Object.fromEntries(params ?? [])).toEqual({
+                template_source: 'all',
+                template_type: 'project',
+                query: 'launch',
+                category_id: 'work',
+                limit: '10',
+            })
+            expect(result.nextCursor).toBe('abc.def')
+            expect(result.results).toHaveLength(1)
+            expect(result.results[0]).toMatchObject({
+                id: 'UT_28Rc62VC22j439VcPJMw9xgWx2',
+                templateSource: 'user',
+            })
+        })
+
+        test('rejects a page with a malformed template', async () => {
+            server.use(
+                http.get(`${getSyncBaseUri()}templates`, () =>
+                    HttpResponse.json({ results: [{ id: 'x' }], next_cursor: null }),
+                ),
+            )
+            const api = getTarget()
+
+            await expect(api.getTemplates()).rejects.toThrow()
+        })
+    })
+
+    describe('getTemplatesByIds', () => {
+        test('joins the IDs into one comma-separated param', async () => {
+            let params: URLSearchParams | undefined
+            server.use(
+                http.get(`${getSyncBaseUri()}templates`, ({ request }) => {
+                    params = new URL(request.url).searchParams
+                    return HttpResponse.json({ results: [], next_cursor: null })
+                }),
+            )
+            const api = getTarget()
+
+            const result = await api.getTemplatesByIds({
+                ids: ['bug-tracking', 'UT_28Rc62VC22j439VcPJMw9xgWx2'],
+                locale: 'de',
+            })
+
+            expect(Object.fromEntries(params ?? [])).toEqual({
+                ids: 'bug-tracking,UT_28Rc62VC22j439VcPJMw9xgWx2',
+                locale: 'de',
+            })
+            expect(result).toEqual({ results: [], nextCursor: null })
+        })
+    })
+
+    describe('getTemplate', () => {
+        test('fetches one template by ID', async () => {
+            let locale: string | null | undefined
+            server.use(
+                http.get(
+                    `${getSyncBaseUri()}templates/UT_28Rc62VC22j439VcPJMw9xgWx2`,
+                    ({ request }) => {
+                        locale = new URL(request.url).searchParams.get('locale')
+                        return HttpResponse.json(RAW_TEMPLATE)
+                    },
+                ),
+            )
+            const api = getTarget()
+
+            const result = await api.getTemplate('UT_28Rc62VC22j439VcPJMw9xgWx2', { locale: 'fr' })
+
+            expect(locale).toBe('fr')
+            expect(result.name).toBe('Launch plan')
+        })
+
+        test('rejects an empty ID before making a request', async () => {
+            let called = false
+            server.use(
+                http.get(`${getSyncBaseUri()}templates/*`, () => {
+                    called = true
+                    return HttpResponse.json(RAW_TEMPLATE)
+                }),
+            )
+            const api = getTarget()
+
+            await expect(api.getTemplate('')).rejects.toThrow()
+            expect(called).toBe(false)
+        })
+    })
+
+    describe('getTemplateCategories', () => {
+        test('returns the validated categories', async () => {
+            let templateType: string | null = null
+            server.use(
+                http.get(`${getSyncBaseUri()}templates/categories`, ({ request }) => {
+                    templateType = new URL(request.url).searchParams.get('template_type')
+                    return HttpResponse.json({
+                        categories: [
+                            {
+                                id: 'work',
+                                name: 'Work',
+                                description: null,
+                                seo: { title: 'Work templates', description: null },
+                            },
+                        ],
+                    })
+                }),
+            )
+            const api = getTarget()
+
+            const result = await api.getTemplateCategories({ templateType: 'project' })
+
+            expect(templateType).toBe('project')
+            expect(result).toEqual([
+                {
+                    id: 'work',
+                    name: 'Work',
+                    description: null,
+                    seo: { title: 'Work templates', description: null },
+                },
+            ])
+        })
+    })
+
+    describe('updateTemplate', () => {
+        test('puts only the given fields and returns the validated template', async () => {
+            let body: unknown
+            server.use(
+                http.put(
+                    `${getTemplatesBaseUri()}templates/user/UT_28Rc62VC22j439VcPJMw9xgWx2`,
+                    async ({ request }) => {
+                        body = await request.json()
+                        return HttpResponse.json({ status: 'ok', ...RAW_TEMPLATE, name: 'Renamed' })
+                    },
+                ),
+            )
+            const api = getTarget()
+
+            const result = await api.updateTemplate('UT_28Rc62VC22j439VcPJMw9xgWx2', {
+                name: 'Renamed',
+                projectId: '123',
+                sharedWithWorkspaceMembers: true,
+            })
+
+            expect(body).toEqual({
+                name: 'Renamed',
+                project_id: '123',
+                shared_with_workspace_members: true,
+            })
+            expect(result.name).toBe('Renamed')
+        })
+
+        test('rejects a temporary template ID before making a request', async () => {
+            let called = false
+            server.use(
+                http.all(`${getTemplatesBaseUri()}templates/*`, () => {
+                    called = true
+                    return HttpResponse.json(RAW_TEMPLATE)
+                }),
+            )
+            const api = getTarget()
+
+            await expect(api.updateTemplate('tmp-1', { name: 'x' })).rejects.toThrow()
+            expect(called).toBe(false)
+        })
+    })
+
+    describe('previewTemplateFromCsv', () => {
+        test('uploads the CSV and renames sync names to SDK ones', async () => {
+            mockedUploadMultipartFile.mockResolvedValue({
+                uploadedFileName: '1234567_abcdef_weekly.csv',
+                templateType: 'project',
+                projects: [DEFAULT_PROJECT],
+                sections: [DEFAULT_SECTION],
+                items: [DEFAULT_TASK],
+                notes: [
+                    {
+                        id: 'n1',
+                        itemId: DEFAULT_TASK.id,
+                        content: 'Check this',
+                        postedAt: '2026-11-05T10:00:00Z',
+                    },
+                ],
+                projectNotes: [],
+                projectViewOptionsDefaults: [],
+                reminders: [],
+            })
+            const api = getTarget()
+
+            const result = await api.previewTemplateFromCsv({
+                file: Buffer.from('TYPE,CONTENT\ntask,Plan'),
+                fileName: 'weekly.csv',
+            })
+
+            expect(mockedUploadMultipartFile).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    baseUrl: getTemplatesBaseUri(),
+                    endpoint: 'templates/user/preview',
+                    fileName: 'weekly.csv',
+                }),
+            )
+            expect(result.uploadedFileName).toBe('1234567_abcdef_weekly.csv')
+            expect(result.content.tasks).toHaveLength(1)
+            expect(result.content.comments).toHaveLength(1)
+            expect(result.content.projectComments).toEqual([])
+            expect(result.content).not.toHaveProperty('items')
+        })
+    })
+
+    describe('addTemplate', () => {
+        test('uploads a file with the template fields as form fields', async () => {
+            mockedUploadMultipartFile.mockResolvedValue(camelCaseKeys(RAW_TEMPLATE))
+            const api = getTarget()
+
+            const result = await api.addTemplate({
+                file: Buffer.from('TYPE,CONTENT\ntask,Plan'),
+                fileName: 'weekly.csv',
+                name: 'Weekly',
+                description: 'Plan the week',
+                color: 30,
+            })
+
+            expect(mockedUploadMultipartFile).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    baseUrl: getTemplatesBaseUri(),
+                    endpoint: 'templates/user/import',
+                    fileName: 'weekly.csv',
+                    additionalFields: {
+                        template_type: 'project',
+                        name: 'Weekly',
+                        description: 'Plan the week',
+                        color: '30',
+                    },
+                }),
+            )
+            expect(result.id).toBe('UT_28Rc62VC22j439VcPJMw9xgWx2')
+        })
+
+        test('saves a staged file as JSON without uploading again', async () => {
+            let body: unknown
+            server.use(
+                http.post(`${getTemplatesBaseUri()}templates/user/import`, async ({ request }) => {
+                    body = await request.json()
+                    return HttpResponse.json(RAW_TEMPLATE)
+                }),
+            )
+            const api = getTarget()
+
+            await api.addTemplate({
+                uploadedFileName: '1234567_abcdef_weekly.csv',
+                name: 'Weekly',
+                description: 'Plan the week',
+                color: 'blue',
+            })
+
+            expect(mockedUploadMultipartFile).not.toHaveBeenCalled()
+            expect(body).toEqual({
+                template_type: 'project',
+                name: 'Weekly',
+                description: 'Plan the week',
+                color: 'blue',
+                uploaded_file_name: '1234567_abcdef_weekly.csv',
+            })
+        })
+
+        test('saves an edited draft as content, without uploading', async () => {
+            let body: Record<string, unknown> = {}
+            server.use(
+                http.post(`${getTemplatesBaseUri()}templates/user/import`, async ({ request }) => {
+                    body = (await request.json()) as Record<string, unknown>
+                    return HttpResponse.json(RAW_TEMPLATE)
+                }),
+            )
+            const api = getTarget()
+
+            await api.addTemplate({
+                name: 'Weekly',
+                description: 'Plan the week',
+                color: 'blue',
+                content: {
+                    projects: [{ viewStyle: 'list' }],
+                    sections: [],
+                    tasks: [{ id: 't1', content: 'Plan' }],
+                    comments: [{ taskId: 't1', content: 'Note' }],
+                    projectComments: [],
+                    projectViewOptionsDefaults: [],
+                },
+            })
+
+            expect(mockedUploadMultipartFile).not.toHaveBeenCalled()
+            expect(body).toEqual({
+                template_type: 'project',
+                name: 'Weekly',
+                description: 'Plan the week',
+                color: 'blue',
+                content: {
+                    projects: [{ view_style: 'list' }],
+                    sections: [],
+                    items: [{ id: 't1', content: 'Plan' }],
+                    notes: [{ item_id: 't1', content: 'Note' }],
+                    project_notes: [],
+                    project_view_options_defaults: [],
+                },
+            })
+        })
+
+        test('needs exactly one source: a file, a staged file name or content', async () => {
+            const api = getTarget()
+
+            await expect(
+                // JavaScript callers can still omit every source; TypeScript rejects it.
+                api.addTemplate({ name: 'Weekly', description: '', color: 'blue' } as never),
+            ).rejects.toThrow('needs exactly one of `content`, `file` or `uploadedFileName`')
+        })
+
+        test('rejects several sources before making a request', async () => {
+            const api = getTarget()
+
+            await expect(
+                api.addTemplate({
+                    name: 'Weekly',
+                    description: '',
+                    color: 'blue',
+                    uploadedFileName: '1234567_abcdef_weekly.csv',
+                    content: {
+                        projects: [{ viewStyle: 'list' }],
+                        sections: [],
+                        tasks: [],
+                        comments: [],
+                        projectComments: [],
+                        projectViewOptionsDefaults: [],
+                    },
+                } as never),
+            ).rejects.toThrow('needs exactly one of `content`, `file` or `uploadedFileName`')
+            expect(mockedUploadMultipartFile).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('getTemplateContent', () => {
+        const RAW_CONTENT = {
+            template_type: 'project',
+            workspace_id: '486413',
+            projects: [
+                {
+                    id: 'p1',
+                    name: 'Plan',
+                    view_style: 'board',
+                    description: '',
+                    icon: null,
+                    color: 'blue',
+                },
+            ],
+            sections: [{ id: 's1', name: 'Week 1', description: null, project_id: 'p1' }],
+            items: [
+                {
+                    id: 't1',
+                    content: 'Plan',
+                    section_id: 's1',
+                    parent_id: null,
+                    priority: 4,
+                    labels: ['work'],
+                    due: {
+                        date: '2026-11-09T09:00:00',
+                        string: 'every monday at 9am',
+                        lang: 'en',
+                        is_recurring: true,
+                        timezone: 'Europe/Rome',
+                    },
+                    deadline: null,
+                    duration: null,
+                    responsible_uid: '42',
+                    assigned_by_uid: '1',
+                    checked: false,
+                    child_order: 1,
+                },
+            ],
+            notes: [
+                {
+                    id: 'n1',
+                    item_id: 't1',
+                    content: 'Check this',
+                    posted_uid: '1',
+                    posted_at: '2026-11-05T10:00:00Z',
+                    file_attachment: null,
+                },
+            ],
+            project_notes: [],
+            project_view_options_defaults: [],
+            reminders: [],
+        }
+
+        test('reads on API v1.6 with full date objects, in the shape updateTemplate takes', async () => {
+            let resolveDates: string | null | undefined
+            let locale: string | null | undefined
+            server.use(
+                http.get(`${getTemplatesBaseUri()}templates/UT_1/preview`, ({ request }) => {
+                    const { searchParams } = new URL(request.url)
+                    resolveDates = searchParams.get('resolve_dates')
+                    locale = searchParams.get('locale')
+                    return HttpResponse.json(RAW_CONTENT)
+                }),
+            )
+            const api = getTarget()
+
+            const result = await api.getTemplateContent('UT_1', { locale: 'fr' })
+
+            expect(resolveDates).toBeNull()
+            expect(locale).toBe('fr')
+            expect(result.templateType).toBe('project')
+            expect(result.workspaceId).toBe('486413')
+            expect(result.content.projects).toEqual([
+                { viewStyle: 'board', description: '', icon: null },
+            ])
+            expect(result.content.tasks).toEqual([
+                {
+                    id: 't1',
+                    content: 'Plan',
+                    sectionId: 's1',
+                    parentId: null,
+                    priority: 4,
+                    labels: ['work'],
+                    due: {
+                        date: '2026-11-09T09:00:00',
+                        string: 'every monday at 9am',
+                        lang: 'en',
+                        isRecurring: true,
+                        timezone: 'Europe/Rome',
+                    },
+                    deadline: null,
+                    duration: null,
+                    responsibleUid: '42',
+                    assignedByUid: '1',
+                },
+            ])
+            expect(result.content.comments).toEqual([
+                {
+                    taskId: 't1',
+                    content: 'Check this',
+                    postedUid: '1',
+                    postedAt: '2026-11-05T10:00:00Z',
+                    fileAttachment: null,
+                },
+            ])
+        })
+
+        test('rejects a setup template rather than drop its other projects and labels', async () => {
+            server.use(
+                http.get(`${getTemplatesBaseUri()}templates/morning-routine/preview`, () =>
+                    HttpResponse.json({
+                        ...RAW_CONTENT,
+                        template_type: 'setup',
+                        workspace_id: null,
+                        projects: [
+                            { id: 'p1', name: 'Work', view_style: 'list' },
+                            { id: 'p2', name: 'Life', view_style: 'list' },
+                        ],
+                        labels: [{ id: '1', name: 'admin', color: 'grey' }],
+                    }),
+                ),
+            )
+            const api = getTarget()
+
+            await expect(api.getTemplateContent('morning-routine')).rejects.toThrow(
+                TodoistArgumentError,
+            )
+        })
+
+        test('sends content read with getTemplateContent back to the API unchanged', async () => {
+            let body: unknown
+            server.use(
+                http.get(`${getTemplatesBaseUri()}templates/UT_1/preview`, () =>
+                    HttpResponse.json(RAW_CONTENT),
+                ),
+                http.put(`${getTemplatesBaseUri()}templates/user/UT_1`, async ({ request }) => {
+                    body = await request.json()
+                    return HttpResponse.json({ status: 'ok', ...RAW_TEMPLATE })
+                }),
+            )
+            const api = getTarget()
+
+            const { content } = await api.getTemplateContent('UT_1')
+            await api.updateTemplate('UT_1', { content })
+
+            expect(body).toEqual({
+                content: {
+                    projects: [{ view_style: 'board', description: '', icon: null }],
+                    sections: [{ id: 's1', name: 'Week 1', description: null }],
+                    items: [
+                        {
+                            id: 't1',
+                            content: 'Plan',
+                            section_id: 's1',
+                            parent_id: null,
+                            priority: 4,
+                            labels: ['work'],
+                            due: {
+                                date: '2026-11-09T09:00:00',
+                                string: 'every monday at 9am',
+                                lang: 'en',
+                                is_recurring: true,
+                                timezone: 'Europe/Rome',
+                            },
+                            deadline: null,
+                            duration: null,
+                            responsible_uid: '42',
+                            assigned_by_uid: '1',
+                        },
+                    ],
+                    notes: [
+                        {
+                            item_id: 't1',
+                            content: 'Check this',
+                            posted_uid: '1',
+                            posted_at: '2026-11-05T10:00:00Z',
+                            file_attachment: null,
+                        },
+                    ],
+                    project_notes: [],
+                    project_view_options_defaults: [],
+                },
+            })
+        })
+
+        test('rejects a date with neither a date nor a string', async () => {
+            server.use(
+                http.get(`${getTemplatesBaseUri()}templates/UT_1/preview`, () =>
+                    HttpResponse.json({
+                        ...RAW_CONTENT,
+                        items: [{ ...RAW_CONTENT.items[0], due: { lang: 'en' } }],
+                    }),
+                ),
+            )
+            const api = getTarget()
+
+            await expect(api.getTemplateContent('UT_1')).rejects.toThrow()
+        })
+
+        test('rejects content and projectId together before making a request', async () => {
+            const api = getTarget()
+            const content = {
+                projects: [],
+                sections: [],
+                tasks: [],
+                comments: [],
+                projectComments: [],
+                projectViewOptionsDefaults: [],
+            }
+
+            await expect(api.updateTemplate('UT_1', { content, projectId: '123' })).rejects.toThrow(
+                'either `content` or `projectId`',
+            )
+        })
+    })
+
+    describe('previewProjectAsTemplate', () => {
+        test('reads a project as a template draft on API v1.6, without saving', async () => {
+            let projectId: string | null = null
+            server.use(
+                http.get(`${getTemplatesBaseUri()}templates/preview`, ({ request }) => {
+                    projectId = new URL(request.url).searchParams.get('project_id')
+                    return HttpResponse.json({
+                        template_type: 'project',
+                        workspace_id: null,
+                        projects: [{ id: 'p1', name: 'Plan', view_style: 'list', description: '' }],
+                        sections: [],
+                        items: [
+                            {
+                                id: 't1',
+                                content: 'Plan',
+                                due: {
+                                    date: '2026-11-13T09:00:00Z',
+                                    string: 'every friday at 10am',
+                                    lang: 'en',
+                                    is_recurring: true,
+                                    timezone: 'Europe/Rome',
+                                },
+                                checked: false,
+                            },
+                        ],
+                        notes: [{ item_id: 't1', content: 'Check this' }],
+                        project_notes: [],
+                        project_view_options_defaults: [],
+                        reminders: [],
+                    })
+                }),
+            )
+            const api = getTarget()
+
+            const result = await api.previewProjectAsTemplate('123')
+
+            expect(projectId).toBe('123')
+            expect(result.templateType).toBe('project')
+            expect(result.workspaceId).toBeNull()
+            expect(result.content.projects).toEqual([{ viewStyle: 'list', description: '' }])
+            expect(result.content.tasks).toEqual([
+                {
+                    id: 't1',
+                    content: 'Plan',
+                    due: {
+                        date: '2026-11-13T09:00:00Z',
+                        string: 'every friday at 10am',
+                        lang: 'en',
+                        isRecurring: true,
+                        timezone: 'Europe/Rome',
+                    },
+                },
+            ])
+            expect(result.content.comments).toEqual([{ taskId: 't1', content: 'Check this' }])
         })
     })
 })
