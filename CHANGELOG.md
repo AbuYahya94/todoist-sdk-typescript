@@ -1,3 +1,21 @@
+## [24.0.0](https://github.com/todoist/todoist-sdk-typescript/compare/v23.0.0...v24.0.0) (2026-11-20)
+
+### ⚠ BREAKING CHANGES
+
+* **templates:** Name the CSV import and export methods after CSV (#750)
+
+### Features
+
+* **templates:** Discover templates and template categories ([#747](https://github.com/todoist/todoist-sdk-typescript/issues/747)) ([d629151](https://github.com/todoist/todoist-sdk-typescript/commit/d6291518e1baa780b356336b0845075a8bd711db))
+* **templates:** Name the CSV import and export methods after CSV ([#750](https://github.com/todoist/todoist-sdk-typescript/issues/750)) ([e877de1](https://github.com/todoist/todoist-sdk-typescript/commit/e877de144a65aae8f7f0126e75c31c2d66121f2a))
+* **templates:** Read a template's content and send edited content back ([#751](https://github.com/todoist/todoist-sdk-typescript/issues/751)) ([3ce0392](https://github.com/todoist/todoist-sdk-typescript/commit/3ce039226150d7b94f47f12fc8c4eafcd4cafc18))
+* **templates:** Save and update templates ([#748](https://github.com/todoist/todoist-sdk-typescript/issues/748)) ([0edd2bb](https://github.com/todoist/todoist-sdk-typescript/commit/0edd2bb3de9ab436e50806146f2e4b973574be48))
+* **templates:** Save projects as templates and create projects from template IDs ([#746](https://github.com/todoist/todoist-sdk-typescript/issues/746)) ([8004c1c](https://github.com/todoist/todoist-sdk-typescript/commit/8004c1ca7232825a6ce6c8e43c71cb289ac9936e))
+
+### Bug Fixes
+
+* **templates:** Move project imports to the public project routes ([#749](https://github.com/todoist/todoist-sdk-typescript/issues/749)) ([c3484aa](https://github.com/todoist/todoist-sdk-typescript/commit/c3484aa19997e649fa3c3917912dee910a432f61))
+
 ## [23.0.0](https://github.com/todoist/todoist-sdk-typescript/compare/v22.0.1...v23.0.0) (2026-11-19)
 
 ### ⚠ BREAKING CHANGES
