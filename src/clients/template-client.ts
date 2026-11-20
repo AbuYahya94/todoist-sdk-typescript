@@ -4,24 +4,38 @@ import {
     ENDPOINT_REST_TEMPLATES_IMPORT_FROM_FILE,
     ENDPOINT_REST_TEMPLATES_IMPORT_FROM_ID,
     ENDPOINT_REST_TEMPLATES_URL,
+    ENDPOINT_REST_TEMPLATES_PREVIEW,
+    ENDPOINT_REST_TEMPLATES_USER,
+    getTemplatesBaseUri,
+    ENDPOINT_REST_PROJECTS_FROM_TEMPLATE,
 } from '../consts/endpoints'
 import { request } from '../transport/http-client'
 import type {
     CreateProjectFromTemplateArgs,
+    AddProjectFromTemplateIdArgs,
+    AddProjectFromTemplateIdResponse,
     CreateProjectFromTemplateResponse,
+    SaveProjectAsTemplateArgs,
+    TemplateContent,
+    TemplateContentResponse,
     ExportTemplateFileArgs,
     ExportTemplateUrlArgs,
     ExportTemplateUrlResponse,
     ImportTemplateFromIdArgs,
     ImportTemplateIntoProjectArgs,
     ImportTemplateResponse,
+    Template,
 } from '../types/templates'
 import { uploadMultipartFile } from '../utils/multipart-upload'
 import {
+    IdSchema,
     validateCommentArray,
+    validateAddProjectFromTemplateIdResponse,
     validateProjectArray,
     validateSectionArray,
     validateTaskArray,
+    validateTemplate,
+    validateTemplateContentResponse,
 } from '../utils/validators'
 import { BaseClient } from './base-client'
 
@@ -33,6 +47,10 @@ import { BaseClient } from './base-client'
  * JSDoc.
  */
 export class TemplateClient extends BaseClient {
+    private get templatesApiBase(): string {
+        return getTemplatesBaseUri(this.syncApiBase)
+    }
+
     async exportTemplateAsFile(args: ExportTemplateFileArgs): Promise<string> {
         const response = await request<string>({
             httpMethod: 'GET',
@@ -123,6 +141,59 @@ export class TemplateClient extends BaseClient {
         return this.validateTemplateResponse(data) as ImportTemplateResponse
     }
 
+    async previewProjectAsTemplate(projectId: string): Promise<TemplateContentResponse> {
+        IdSchema.parse(projectId)
+        const { data } = await request<unknown>({
+            httpMethod: 'GET',
+            baseUri: this.templatesApiBase,
+            relativePath: ENDPOINT_REST_TEMPLATES_PREVIEW,
+            apiToken: this.authToken,
+            customFetch: this.customFetch,
+            customHeaders: this.customHeaders,
+            payload: { projectId },
+        })
+        return validateTemplateContentResponse(data)
+    }
+
+    async saveProjectAsTemplate(
+        args: SaveProjectAsTemplateArgs,
+        requestId?: string,
+    ): Promise<Template> {
+        const { templateType = 'project', content, ...rest } = args
+        const { data } = await request<unknown>({
+            httpMethod: 'POST',
+            baseUri: this.templatesApiBase,
+            relativePath: ENDPOINT_REST_TEMPLATES_USER,
+            apiToken: this.authToken,
+            customFetch: this.customFetch,
+            customHeaders: this.customHeaders,
+            payload: {
+                ...rest,
+                templateType,
+                ...(content ? { content: toApiTemplateContent(content) } : {}),
+            },
+            requestId: requestId,
+        })
+        return validateTemplate(data)
+    }
+
+    async addProjectFromTemplateId(
+        args: AddProjectFromTemplateIdArgs,
+        requestId?: string,
+    ): Promise<AddProjectFromTemplateIdResponse> {
+        const { data } = await request<unknown>({
+            httpMethod: 'POST',
+            baseUri: this.syncApiBase,
+            relativePath: ENDPOINT_REST_PROJECTS_FROM_TEMPLATE,
+            apiToken: this.authToken,
+            customFetch: this.customFetch,
+            customHeaders: this.customHeaders,
+            payload: args,
+            requestId: requestId,
+        })
+        return validateAddProjectFromTemplateIdResponse(data)
+    }
+
     private validateTemplateResponse(data: Record<string, unknown>) {
         return {
             ...data,
@@ -131,5 +202,14 @@ export class TemplateClient extends BaseClient {
             tasks: validateTaskArray((data.tasks as unknown[]) ?? []),
             comments: validateCommentArray((data.comments as unknown[]) ?? []),
         }
+    }
+}
+
+function toApiTemplateContent({ tasks, comments, projectComments, ...rest }: TemplateContent) {
+    return {
+        ...rest,
+        items: tasks,
+        notes: comments.map(({ taskId, ...comment }) => ({ itemId: taskId, ...comment })),
+        projectNotes: projectComments,
     }
 }
