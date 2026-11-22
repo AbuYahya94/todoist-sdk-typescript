@@ -510,8 +510,15 @@ export class TodoistApi {
      *
      * Uses offset-based pagination rather than cursor-based.
      *
+     * Each item describes a completion (`taskId`, `completedAt`, `noteCount`, ...) and is not a
+     * full {@link Task}. Set `annotateItems` to get the task itself in `itemObject`, and
+     * `annotateNotes` to get its comments in `notes`.
+     *
+     * The API has deprecated this endpoint in favour of the one behind
+     * `getCompletedTasksByCompletionDate`, which returns full tasks.
+     *
      * @param args - Optional parameters including project ID, label, date range, and pagination.
-     * @returns A promise that resolves to completed tasks with associated project and section data.
+     * @returns A promise that resolves to completed items with associated project and section data.
      */
     async getAllCompletedTasks(
         args: GetAllCompletedTasksArgs = {},

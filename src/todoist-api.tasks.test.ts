@@ -1,3 +1,4 @@
+import { ZodError } from 'zod'
 import { TodoistApi } from '.'
 import {
     getSyncBaseUri,
@@ -14,6 +15,8 @@ import {
 import { server, http, HttpResponse } from './test-utils/msw-setup'
 import {
     DEFAULT_AUTH_TOKEN,
+    DEFAULT_COMMENT,
+    DEFAULT_RAW_COMMENT,
     DEFAULT_REQUEST_ID,
     DEFAULT_TASK,
     DEFAULT_TASK_ID,
@@ -685,11 +688,25 @@ describe('TodoistApi task endpoints', () => {
     })
 
     describe('getAllCompletedTasks', () => {
+        const DEFAULT_COMPLETED_TASK_ITEM = {
+            completed_at: '2026-11-20T10:15:00.000000Z',
+            content: 'Water the plants',
+            id: DEFAULT_TASK_ID,
+            item_object: null,
+            meta_data: null,
+            note_count: 0,
+            notes: [],
+            project_id: '6Jf8VQXxpwv56VQ7',
+            section_id: null,
+            task_id: DEFAULT_TASK_ID,
+            user_id: '2671355',
+        }
+
         test('returns completed tasks from rest client', async () => {
             const mockResponse = {
                 projects: { '123': { id: '123', name: 'Project' } },
                 sections: {},
-                items: [DEFAULT_TASK],
+                items: [DEFAULT_COMPLETED_TASK_ITEM],
             }
             server.use(
                 http.get(`${getSyncBaseUri()}${ENDPOINT_REST_TASKS_COMPLETED}`, () => {
@@ -702,6 +719,146 @@ describe('TodoistApi task endpoints', () => {
 
             expect(result.items).toHaveLength(1)
             expect(result.projects).toHaveProperty('123')
+        })
+
+        test('accepts the completed item shape the API returns', async () => {
+            server.use(
+                http.get(`${getSyncBaseUri()}${ENDPOINT_REST_TASKS_COMPLETED}`, () => {
+                    return HttpResponse.json(
+                        {
+                            items: [
+                                {
+                                    completed_at: '2026-11-20T10:15:00.000000Z',
+                                    content: 'Water the plants',
+                                    id: '6X7rM8997g3RQmvh',
+                                    item_object: null,
+                                    meta_data: null,
+                                    note_count: 0,
+                                    notes: [],
+                                    project_id: '6Jf8VQXxpwv56VQ7',
+                                    section_id: '6Jf8VQXxpwv56VQ8',
+                                    task_id: '6X7rM8997g3RQmvh',
+                                    user_id: '2671355',
+                                },
+                            ],
+                            projects: {},
+                            sections: {},
+                        },
+                        { status: 200 },
+                    )
+                }),
+            )
+            const api = getTarget()
+
+            const result = await api.getAllCompletedTasks()
+
+            expect(result.items).toEqual([
+                {
+                    completedAt: new Date('2026-11-20T10:15:00.000Z'),
+                    content: 'Water the plants',
+                    id: '6X7rM8997g3RQmvh',
+                    itemObject: null,
+                    metaData: null,
+                    noteCount: 0,
+                    notes: [],
+                    projectId: '6Jf8VQXxpwv56VQ7',
+                    sectionId: '6Jf8VQXxpwv56VQ8',
+                    taskId: '6X7rM8997g3RQmvh',
+                    userId: '2671355',
+                },
+            ])
+        })
+
+        test('returns an empty list when nothing was completed', async () => {
+            server.use(
+                http.get(`${getSyncBaseUri()}${ENDPOINT_REST_TASKS_COMPLETED}`, () => {
+                    return HttpResponse.json(
+                        { items: [], projects: {}, sections: {} },
+                        { status: 200 },
+                    )
+                }),
+            )
+            const api = getTarget()
+
+            const result = await api.getAllCompletedTasks()
+
+            expect(result.items).toEqual([])
+        })
+
+        test('parses the task and comments returned for annotated items', async () => {
+            let requestUrl = ''
+            server.use(
+                http.get(`${getSyncBaseUri()}${ENDPOINT_REST_TASKS_COMPLETED}`, ({ request }) => {
+                    requestUrl = request.url
+                    return HttpResponse.json(
+                        {
+                            items: [
+                                {
+                                    ...DEFAULT_COMPLETED_TASK_ITEM,
+                                    note_count: 1,
+                                    notes: [DEFAULT_RAW_COMMENT],
+                                    item_object: DEFAULT_TASK,
+                                },
+                            ],
+                            projects: {},
+                            sections: {},
+                        },
+                        { status: 200 },
+                    )
+                }),
+            )
+            const api = getTarget()
+
+            const result = await api.getAllCompletedTasks({
+                annotateItems: true,
+                annotateNotes: true,
+            })
+
+            expect(new URL(requestUrl).searchParams.get('annotate_items')).toBe('true')
+            expect(new URL(requestUrl).searchParams.get('annotate_notes')).toBe('true')
+            expect(result.items[0].noteCount).toBe(1)
+            expect(result.items[0].notes).toEqual([DEFAULT_COMMENT])
+            expect(result.items[0].itemObject).toEqual(DEFAULT_TASK)
+        })
+
+        test('accepts legacy metadata, which the API sends as a string', async () => {
+            server.use(
+                http.get(`${getSyncBaseUri()}${ENDPOINT_REST_TASKS_COMPLETED}`, () => {
+                    return HttpResponse.json(
+                        {
+                            items: [{ ...DEFAULT_COMPLETED_TASK_ITEM, meta_data: 'legacy note' }],
+                            projects: {},
+                            sections: {},
+                        },
+                        { status: 200 },
+                    )
+                }),
+            )
+            const api = getTarget()
+
+            const result = await api.getAllCompletedTasks()
+
+            expect(result.items[0].metaData).toBe('legacy note')
+        })
+
+        test('rejects an item that has no completion date', async () => {
+            const { completed_at: _completedAt, ...incompleteItem } = DEFAULT_COMPLETED_TASK_ITEM
+            server.use(
+                http.get(`${getSyncBaseUri()}${ENDPOINT_REST_TASKS_COMPLETED}`, () => {
+                    return HttpResponse.json(
+                        { items: [incompleteItem], projects: {}, sections: {} },
+                        { status: 200 },
+                    )
+                }),
+            )
+            const api = getTarget()
+
+            const error = await api.getAllCompletedTasks().catch((e: unknown) => e)
+
+            expect(error).toBeInstanceOf(ZodError)
+            expect((error as ZodError).issues.map((issue) => issue.path)).toEqual([
+                [0, 'completedAt'],
+            ])
         })
     })
 })
