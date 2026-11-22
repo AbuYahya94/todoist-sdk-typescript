@@ -1,3 +1,9 @@
+## [24.0.1](https://github.com/todoist/todoist-sdk-typescript/compare/v24.0.0...v24.0.1) (2026-11-22)
+
+### Bug Fixes
+
+* **tasks:** validate getAllCompletedTasks items against the completed item shape ([#784](https://github.com/todoist/todoist-sdk-typescript/issues/784)) ([7ed8ee2](https://github.com/todoist/todoist-sdk-typescript/commit/7ed8ee23140767a6e371e43c120861da64ccd000))
+
 ## [24.0.0](https://github.com/todoist/todoist-sdk-typescript/compare/v23.0.0...v24.0.0) (2026-11-20)
 
 ### ⚠ BREAKING CHANGES
