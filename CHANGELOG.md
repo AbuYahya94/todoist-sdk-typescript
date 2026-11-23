@@ -1,3 +1,9 @@
+## [24.1.0](https://github.com/todoist/todoist-sdk-typescript/compare/v24.0.1...v24.1.0) (2026-11-23)
+
+### Features
+
+* **projects:** support project icons ([#785](https://github.com/todoist/todoist-sdk-typescript/issues/785)) ([ce96941](https://github.com/todoist/todoist-sdk-typescript/commit/ce969412e8054ad531f98448d6314c1c7652c73f))
+
 ## [24.0.1](https://github.com/todoist/todoist-sdk-typescript/compare/v24.0.0...v24.0.1) (2026-11-22)
 
 ### Bug Fixes
