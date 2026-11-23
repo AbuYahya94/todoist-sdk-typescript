@@ -1,3 +1,9 @@
+## [24.1.1](https://github.com/todoist/todoist-sdk-typescript/compare/v24.1.0...v24.1.1) (2026-11-23)
+
+### Bug Fixes
+
+* convert API field names to camelCase the same way in every locale ([#786](https://github.com/todoist/todoist-sdk-typescript/issues/786)) ([e6b257e](https://github.com/todoist/todoist-sdk-typescript/commit/e6b257e0ccea251898b20e9839d475afe8885cfb))
+
 ## [24.1.0](https://github.com/todoist/todoist-sdk-typescript/compare/v24.0.1...v24.1.0) (2026-11-23)
 
 ### Features
