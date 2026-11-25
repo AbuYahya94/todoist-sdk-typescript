@@ -726,7 +726,9 @@ describe('TodoistApi task endpoints', () => {
                 http.get(`${getSyncBaseUri()}${ENDPOINT_REST_TASKS_COMPLETED}`, () => {
                     return HttpResponse.json(
                         {
-                            items: [DEFAULT_COMPLETED_TASK_ITEM],
+                            items: [
+                                { ...DEFAULT_COMPLETED_TASK_ITEM, project_id: '6Jf8VQXxpwv56VQ7' },
+                            ],
                             projects: {
                                 '6Jf8VQXxpwv56VQ7': { id: '6Jf8VQXxpwv56VQ7', child_order: 1 },
                             },
@@ -748,7 +750,10 @@ describe('TodoistApi task endpoints', () => {
             expect(result.sections).toEqual({
                 '6X7rM8997g3RQmvh': { id: '6X7rM8997g3RQmvh', sectionOrder: 2 },
             })
-            expect(result.projects[result.items[0].projectId]).toBeDefined()
+            expect(result.projects[result.items[0].projectId]).toEqual({
+                id: '6Jf8VQXxpwv56VQ7',
+                childOrder: 1,
+            })
         })
 
         test('accepts the completed item shape the API returns', async () => {
